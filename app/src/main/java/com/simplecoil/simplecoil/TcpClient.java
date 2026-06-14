@@ -25,6 +25,8 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
 
+import androidx.core.content.ContextCompat;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -79,7 +81,9 @@ public class TcpClient extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        registerReceiver(mGPSUpdateReceiver, new IntentFilter(NetMsg.NETMSG_GPSLOCUPDATE));
+        ContextCompat.registerReceiver(this, mGPSUpdateReceiver,
+                new IntentFilter(NetMsg.NETMSG_GPSLOCUPDATE),
+                ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -161,7 +165,7 @@ public class TcpClient extends Service {
             try {
                 if (wasConnected) {
                     wasConnected = false;
-                    sendBroadcast(new Intent(NetMsg.NETMSG_NETWORKDISCONNECTED));
+                    NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_NETWORKDISCONNECTED));
                 }
                 if (Globals.getInstance().mGameState == Globals.GAME_STATE_NONE)
                     retryCount--;
@@ -174,7 +178,7 @@ public class TcpClient extends Service {
                 sendPlayerInfo(rejoin);
                 wasConnected = true;
                 if (rejoin)
-                    sendBroadcast(new Intent(NetMsg.NETMSG_NETWORKCONNECTED));
+                    NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_NETWORKCONNECTED));
                 rejoin = true;
                 int noReadCount = 0;
                 retryCount = MAX_REJOIN_TRIES;
@@ -196,19 +200,19 @@ public class TcpClient extends Service {
                                     Byte id = (byte) (int) Integer.parseInt(message);
                                     Intent intent = new Intent(NetMsg.NETMSG_ELIMINATED);
                                     intent.putExtra(UDPListenerService.INTENT_PLAYERID, id);
-                                    sendBroadcast(intent);
+                                    NetMsg.sendInternal(this,intent);
                                 } else if (message.equals(NetMsg.NETMSG_TEAMELIMINATED)) {
-                                    sendBroadcast(new Intent(NetMsg.NETMSG_TEAMELIMINATED));
+                                    NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_TEAMELIMINATED));
                                 } else if (message.equals(NetMsg.NETMSG_ENDGAME)) {
-                                    sendBroadcast(new Intent(NetMsg.NETMSG_ENDGAME));
+                                    NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_ENDGAME));
                                 } else if (message.equals(NetMsg.NETMSG_STARTGAME)) {
-                                    sendBroadcast(new Intent(NetMsg.NETMSG_STARTGAME));
+                                    NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_STARTGAME));
                                 } else if (message.equals(NetMsg.NETMSG_SERVERCANCEL)) {
-                                    sendBroadcast(new Intent(NetMsg.NETMSG_SERVERCANCEL));
+                                    NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_SERVERCANCEL));
                                     break;
                                 }
                             } else if (message.startsWith(NetMsg.NETMSG_VERSIONERROR)) {
-                                sendBroadcast(new Intent(NetMsg.NETMSG_VERSIONERROR));
+                                NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_VERSIONERROR));
                                 break;
                             } else {
                                 Log.d(TAG, "unknown tcp message received");
@@ -246,7 +250,7 @@ public class TcpClient extends Service {
             }
         }
         if (retryCount == 0 && keepListening) {
-            sendBroadcast(new Intent(NetMsg.NETMSG_SERVERCANCEL));
+            NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_SERVERCANCEL));
         }
         Log.d(TAG, "Client stopping");
         keepListening = false;
@@ -404,13 +408,13 @@ public class TcpClient extends Service {
                 Globals.getInstance().mGPSDataSemaphore.release();
                 Intent intent = new Intent(NetMsg.NETMSG_GPSDATAUPDATE);
                 intent.putExtra(NetMsg.INTENT_FULLUPDATE, fullUpdate);
-                sendBroadcast(intent);
+                NetMsg.sendInternal(this,intent);
                 return;
             }
             if (game.has(TcpServer.JSON_PLAYERDATA)) {
                 Intent intent = new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE);
                 intent.putExtra(NetMsg.INTENT_PLAYERDATA, message);
-                sendBroadcast(intent);
+                NetMsg.sendInternal(this,intent);
                 return;
             }
             if (game.has(TcpServer.JSON_PLAYERSETTINGS)) {
@@ -460,7 +464,7 @@ public class TcpClient extends Service {
                 Globals.getInstance().mPlayerSettingsSemaphore.release();
                 Globals.getInstance().mAllowPlayerSettings = game.getBoolean(TcpServer.JSON_ALLOWPLAYERSETTINGS);
                 gotPlayerSettingsSemaphore = false;
-                sendBroadcast(new Intent(NetMsg.NETMSG_PLAYERSETTINGSUPDATE));
+                NetMsg.sendInternal(this,new Intent(NetMsg.NETMSG_PLAYERSETTINGSUPDATE));
             }
             if (game.has(TcpServer.JSON_PLAYERS)) {
                 Globals.getmTeamPlayerNameSemaphore();
@@ -533,7 +537,7 @@ public class TcpClient extends Service {
                     int gameState = game.getInt(TcpServer.JSON_GAMESTATE);
                     intent.putExtra(NetMsg.INTENT_GAMESTATE, gameState);
                 }
-                sendBroadcast(intent);
+                NetMsg.sendInternal(this,intent);
             }
         } catch (JSONException e) {
             e.printStackTrace();

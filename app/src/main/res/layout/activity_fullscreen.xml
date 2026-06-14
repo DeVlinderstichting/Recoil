@@ -47,20 +47,20 @@
             android:text="@string/connect_weapon_button" />
 
         <Button
-            android:id="@+id/connect_qr_weapon_button"
+            android:id="@+id/connect_code_weapon_button"
             style="@style/Widget.AppCompat.Button.Colored"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:layout_centerHorizontal="true"
             android:layout_below="@id/connect_weapon_button"
-            android:text="@string/connect_qr_weapon_button" />
+            android:text="@string/connect_code_weapon_button" />
 
         <TextView
             android:id="@+id/connect_status_tv"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@+id/connect_qr_weapon_button"
+            android:layout_below="@+id/connect_code_weapon_button"
             android:layout_marginTop="15dp"
             android:layout_centerHorizontal="true"
             android:text="@string/connect_status_not_connected"
@@ -93,15 +93,6 @@
         android:visibility="visible"
         android:fitsSystemWindows="true">
 
-        <fragment
-            android:layout_width="fill_parent"
-            android:layout_height="400dp"
-            android:name="com.simplecoil.simplecoil.MapFragment"
-            android:id="@+id/map_fragment"
-            android:visibility="visible"
-            android:layout_below="@id/health_pb"
-            android:layout_centerHorizontal="true" />
-
         <ImageView
             android:id="@+id/battery_iv"
             android:layout_width="wrap_content"
@@ -109,6 +100,19 @@
             android:layout_marginTop="5dp"
             android:layout_marginStart="10dp"
             app:srcCompat="@drawable/ic_battery_full_green_24dp" />
+
+        <Button
+            android:id="@+id/show_code_button"
+            style="@style/Widget.AppCompat.Button.Borderless.Colored"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@id/battery_iv"
+            android:layout_marginStart="4dp"
+            android:layout_marginTop="0dp"
+            android:minHeight="0dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:text="@string/show_code_button" />
 
         <ImageView
             android:id="@+id/network_status_iv"

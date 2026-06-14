@@ -203,7 +203,7 @@ public class UDPListenerService extends Service {
             }
         }
         if (intent != null)
-            sendBroadcast(intent);
+            NetMsg.sendInternal(UDPListenerService.this,intent);
     }
 
     Thread UDPMessageThread;
@@ -302,7 +302,7 @@ public class UDPListenerService extends Service {
         }
         Globals.getInstance().mServerIP = mMyIP;
         Intent intent = new Intent(NetMsg.NETMSG_SERVERCREATED);
-        sendBroadcast(intent);
+        NetMsg.sendInternal(UDPListenerService.this,intent);
     }
 
     public void cancelServer() {
@@ -401,7 +401,7 @@ public class UDPListenerService extends Service {
 
     private void sendFailedJoin() {
         Intent intent = new Intent(NetMsg.NETMSG_FAILEDTOJOIN);
-        sendBroadcast(intent);
+        NetMsg.sendInternal(UDPListenerService.this,intent);
     }
 
     public void sendUDPMessage(String message, Byte playerID) {
@@ -440,7 +440,7 @@ public class UDPListenerService extends Service {
                         e.printStackTrace();
                         Intent intent = new Intent(NetMsg.NETMSG_ERROR);
                         intent.putExtra(INTENT_MESSAGE, e.getLocalizedMessage());
-                        sendBroadcast(intent);
+                        NetMsg.sendInternal(UDPListenerService.this,intent);
                     }
                 }
                 Globals.getInstance().mIPTeamMapSemaphore.release();
@@ -477,7 +477,7 @@ public class UDPListenerService extends Service {
                             e.printStackTrace();
                             Intent intent = new Intent(NetMsg.NETMSG_ERROR);
                             intent.putExtra(INTENT_MESSAGE, e.getLocalizedMessage());
-                            sendBroadcast(intent);
+                            NetMsg.sendInternal(UDPListenerService.this,intent);
                         }
                     }
                     Globals.getInstance().mIPTeamMapSemaphore.release();
@@ -511,7 +511,7 @@ public class UDPListenerService extends Service {
                     e.printStackTrace();
                     Intent intent = new Intent(NetMsg.NETMSG_ERROR);
                     intent.putExtra(INTENT_MESSAGE, e.getLocalizedMessage());
-                    sendBroadcast(intent);
+                    NetMsg.sendInternal(UDPListenerService.this,intent);
                 }
                 mSendingMessage = false;
             }

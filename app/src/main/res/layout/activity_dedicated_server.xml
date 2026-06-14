@@ -153,10 +153,58 @@
             android:text="@string/dedicated_server_settings_only"
             android:textColor="#FFFFFF"/>
 
+        <LinearLayout
+            android:id="@+id/team_scoreboard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/only_server_settings_switch"
+            android:layout_marginTop="6dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/team_score_1_tv"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text=""
+                android:textAppearance="@android:style/TextAppearance.Material.Large.Inverse" />
+
+            <TextView
+                android:id="@+id/team_score_2_tv"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text=""
+                android:textAppearance="@android:style/TextAppearance.Material.Large.Inverse" />
+
+            <TextView
+                android:id="@+id/team_score_3_tv"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text=""
+                android:textAppearance="@android:style/TextAppearance.Material.Large.Inverse" />
+
+            <TextView
+                android:id="@+id/team_score_4_tv"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text=""
+                android:textAppearance="@android:style/TextAppearance.Material.Large.Inverse" />
+        </LinearLayout>
+
         <ListView
             android:id="@+id/player_list"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@id/only_server_settings_switch" />
+            android:layout_below="@id/team_scoreboard" />
     </RelativeLayout>
 </FrameLayout>

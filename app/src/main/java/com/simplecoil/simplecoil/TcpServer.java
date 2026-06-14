@@ -239,12 +239,56 @@ public class TcpServer extends Service {
                     entry.getValue().sendTCPMessage(message);
                 }
                 mClientDataSemaphore.release();
-                sendBroadcast(new Intent(NetMsg.NETMSG_STARTGAME));
+                NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_STARTGAME));
                 if (!mIsDedicated)
                     keepListening = false;
             }
         });
         sendThread.start();
+    }
+
+    // Called from the kill-handler after a player's score is incremented. If the
+    // score limit is configured (GAME_LIMIT_SCORE bit set) and any team total
+    // (or any individual score in FFA) has reached it, ends the game via the
+    // existing endGame() path. Caller is expected to already hold
+    // mClientDataSemaphore — endGame() spawns its own thread that will wait on
+    // the semaphore, so it is safe to invoke from the locked region.
+    private void checkScoreLimit() {
+        if ((Globals.getInstance().mGameLimit & Globals.GAME_LIMIT_SCORE) == 0)
+            return;
+        if (Globals.getInstance().mScoreLimit <= 0)
+            return;
+        if (Globals.getInstance().mGameState != Globals.GAME_STATE_RUNNING)
+            return;
+        if (mClientData == null || mClientData.isEmpty())
+            return;
+
+        int limit = Globals.getInstance().mScoreLimit;
+        int mode = Globals.getInstance().mGameMode;
+
+        if (mode == Globals.GAME_MODE_FFA) {
+            for (Map.Entry<Integer, ClientData> entry : mClientData.entrySet()) {
+                if (entry.getValue().points >= limit) {
+                    Log.i(TAG, "Score limit reached by player " + entry.getValue().mPlayerID + ", ending game");
+                    endGame();
+                    return;
+                }
+            }
+        } else {
+            int[] teamPoints = new int[4];
+            for (Map.Entry<Integer, ClientData> entry : mClientData.entrySet()) {
+                int team = Globals.getInstance().calcNetworkTeam(entry.getValue().mPlayerID);
+                if (team >= 1 && team <= 4)
+                    teamPoints[team - 1] += entry.getValue().points;
+            }
+            for (int i = 0; i < 4; i++) {
+                if (teamPoints[i] >= limit) {
+                    Log.i(TAG, "Score limit reached by team " + (i + 1) + ", ending game");
+                    endGame();
+                    return;
+                }
+            }
+        }
     }
 
     public void endGame() {
@@ -279,7 +323,7 @@ public class TcpServer extends Service {
                 Globals.getInstance().mIPTeamMap.clear();
                 Globals.getInstance().mIPTeamMapSemaphore.release();
                 Globals.getInstance().mPairedGrenadeID = Globals.INVALID_PLAYER_ID;
-                sendBroadcast(new Intent(NetMsg.NETMSG_ENDGAME));
+                NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_ENDGAME));
             }
         });
         sendThread.start();
@@ -782,7 +826,8 @@ public class TcpServer extends Service {
                                                 // Send a message to all teammates about the score increase
                                                 sendTCPMessageTeam(TCPMESSAGE_PREFIX + TCPPREFIX_MESG + NetMsg.NETMSG_TEAMELIMINATED, (byte) id, false, false, true);
                                             }
-                                            sendBroadcast(new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
+                                            NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
+                                            checkScoreLimit();
                                         } else if (message.equals(NetMsg.NETMSG_PLAYERDATAREQUEST)) {
                                             sendPlayerData(entry.getValue().mPlayerID);
                                         } else if (message.equals(NetMsg.NETMSG_STARTGAME)) {
@@ -947,7 +992,7 @@ public class TcpServer extends Service {
                 }
                 Globals.getInstance().mPlayerSettingsSemaphore.release();
                 sendPlayerSettings((byte)SEND_ALL, false, true);
-                sendBroadcast(new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
+                NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
                 return;
             }
             if (player.has(JSON_PLAYERNAMECHANGE)) {
@@ -965,7 +1010,7 @@ public class TcpServer extends Service {
                 Globals.getInstance().mTeamPlayerNameSemaphore.release();
 
                 sendAllGameInfo(SEND_ALL);
-                sendBroadcast(new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
+                NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
                 return;
             }
             mGPSIntervalCount = SEND_ALL_GPS_INTERVAL; // Send all GPS info because of the new client
@@ -986,7 +1031,7 @@ public class TcpServer extends Service {
                         Log.d(TAG, "rejoining " + client.clientID + " to " + entry.getValue().clientID);
                         entry.getValue().rejoin(client.clientSocket);
                         mClientData.remove(client.clientID);
-                        sendBroadcast(new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
+                        NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
                         return;
                     } else {
                         Log.d(TAG, "new client " + client.clientID + " replacing old client " + entry.getValue().clientID);
@@ -1017,7 +1062,7 @@ public class TcpServer extends Service {
             Globals.getInstance().mTeamPlayerNameSemaphore.release();
 
             sendAllGameInfo(id);
-            sendBroadcast(new Intent(NetMsg.NETMSG_JOIN));
+            NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_JOIN));
         }
 
         private void removeClient(ClientData client, Integer clientID, boolean alwaysRemove) {
@@ -1037,7 +1082,7 @@ public class TcpServer extends Service {
                     mGPSIntervalCount = SEND_ALL_GPS_INTERVAL; // Force a full GPS update when someone leaves
                     Globals.getInstance().mGPSDataSemaphore.release();
                     sendAllGameInfo(SEND_ALL);
-                    sendBroadcast(new Intent(NetMsg.NETMSG_LEAVE));
+                    NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_LEAVE));
                     client.close();
                     mClientData.remove(clientID);
                 } else {
@@ -1047,7 +1092,7 @@ public class TcpServer extends Service {
                 client.close();
                 mClientData.remove(clientID);
             }
-            sendBroadcast(new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
+            NetMsg.sendInternal(TcpServer.this,new Intent(NetMsg.NETMSG_PLAYERDATAUPDATE));
         }
     }
 

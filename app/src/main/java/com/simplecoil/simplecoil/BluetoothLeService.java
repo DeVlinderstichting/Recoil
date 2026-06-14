@@ -16,6 +16,7 @@
 
 package com.simplecoil.simplecoil;
 
+import android.annotation.SuppressLint;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -41,6 +42,7 @@ import java.util.UUID;
  * Service for managing connection and data communication with a GATT server hosted on a
  * given Bluetooth LE device.
  */
+@SuppressLint("MissingPermission")
 public class BluetoothLeService extends Service {
     private final static String TAG = BluetoothLeService.class.getSimpleName();
 
@@ -210,15 +212,21 @@ public class BluetoothLeService extends Service {
         }
     };
 
-    private void broadcastUpdate(final String action) {
-        final Intent intent = new Intent(action);
+    // Android 14+ silently drops implicit broadcasts to the same app, so every
+    // internal broadcast we send must carry our package. Funnel all sends through
+    // this helper rather than calling Context#sendBroadcast directly.
+    private void sendInternal(Intent intent) {
+        intent.setPackage(getPackageName());
         sendBroadcast(intent);
+    }
+
+    private void broadcastUpdate(final String action) {
+        sendInternal(new Intent(action));
     }
 
     private void broadcastUpdate(final BluetoothGattCharacteristic characteristic) {
         if (UUID_RECOIL_TELEMETRY.equals((characteristic.getUuid()))) {
-            final Intent intent = new Intent(TELEMETRY_DATA_AVAILABLE);
-            sendBroadcast(intent);
+            sendInternal(new Intent(TELEMETRY_DATA_AVAILABLE));
         } else if (UUID_RECOIL_ID.equals((characteristic.getUuid()))) {
             int firmwareVer = (characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0) << 8) + characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 1);
             Log.d(TAG, "Firmware version: " + firmwareVer);
@@ -226,7 +234,7 @@ public class BluetoothLeService extends Service {
             final Intent intent = new Intent(ID_DATA_AVAILABLE);
             final byte[] data = characteristic.getValue();
             intent.putExtra(EXTRA_DATA, data[10]);
-            sendBroadcast(intent);
+            sendInternal(intent);
         } else {
             Log.e(TAG, "unexpected characteristic data from " + characteristic.getUuid().toString());
         }

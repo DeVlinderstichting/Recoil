@@ -16,9 +16,25 @@
 
 package com.simplecoil.simplecoil;
 
+import android.content.Context;
+import android.content.Intent;
+
 // Network message globals
 
 public class NetMsg {
+
+    // Android 14+ silently drops implicit broadcasts to the same app, so all
+    // internal broadcasts must be addressed to our own package. Use these
+    // helpers instead of Context#sendBroadcast directly.
+    public static void sendInternal(Context context, Intent intent) {
+        intent.setPackage(context.getPackageName());
+        context.sendBroadcast(intent);
+    }
+
+    public static void sendInternal(Context context, String action) {
+        sendInternal(context, new Intent(action));
+    }
+
     public static final String MESSAGE_PREFIX = "SimpleCoil:";
     public static final String NETWORK_VERSION = "06";
 

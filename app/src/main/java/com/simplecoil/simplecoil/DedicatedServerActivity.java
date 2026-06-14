@@ -45,6 +45,7 @@ import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.Chronometer;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupMenu;
 import android.widget.RadioButton;
@@ -54,6 +55,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import java.util.concurrent.TimeUnit;
 
@@ -86,6 +88,9 @@ public class DedicatedServerActivity extends AppCompatActivity implements PopupM
 
     private PlayerDisplayData[] mPlayerDisplayData = new PlayerDisplayData[Globals.MAX_PLAYER_ID + 2];
     PlayerDisplayDataListAdapter mPlayerDisplayListAdapter = null;
+
+    private LinearLayout mTeamScoreboard = null;
+    private TextView[] mTeamScoreTV = new TextView[4];
 
     // Code to manage Service lifecycle.
     private ServiceConnection mUDPServiceConnection = null;
@@ -244,6 +249,11 @@ public class DedicatedServerActivity extends AppCompatActivity implements PopupM
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        mTeamScoreboard = findViewById(R.id.team_scoreboard);
+        mTeamScoreTV[0] = findViewById(R.id.team_score_1_tv);
+        mTeamScoreTV[1] = findViewById(R.id.team_score_2_tv);
+        mTeamScoreTV[2] = findViewById(R.id.team_score_3_tv);
+        mTeamScoreTV[3] = findViewById(R.id.team_score_4_tv);
         getPlayerDisplayData();
         mPlayerDisplayListAdapter = new PlayerDisplayDataListAdapter(DedicatedServerActivity.this, mPlayerDisplayData, false);
         mPlayerDisplayList = findViewById(R.id.player_list);
@@ -263,7 +273,8 @@ public class DedicatedServerActivity extends AppCompatActivity implements PopupM
     @Override
     protected void onResume() {
         super.onResume();
-        registerReceiver(mServerUpdateReceiver, makeServerUpdateIntentFilter());
+        ContextCompat.registerReceiver(this, mServerUpdateReceiver,
+                makeServerUpdateIntentFilter(), ContextCompat.RECEIVER_NOT_EXPORTED);
         setupUDPServiceConnection();
         setupTcpServerServiceConnection();
     }
@@ -626,6 +637,40 @@ public class DedicatedServerActivity extends AppCompatActivity implements PopupM
             mPlayerDisplayListAdapter.setData(mPlayerDisplayData);
             if (mPlayerDisplayList != null)
                 mPlayerDisplayList.setAdapter(mPlayerDisplayListAdapter);
+        }
+        // The scoreboard is informational only; never let a render bug bubble up
+        // and disrupt the game data path that just finished above.
+        try {
+            updateTeamScoreboard(teamPoints);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to update team scoreboard", e);
+        }
+    }
+
+    private void updateTeamScoreboard(int[] teamPoints) {
+        if (mTeamScoreboard == null) return;
+        int mode = Globals.getInstance().mGameMode;
+        int visibleTeams;
+        if (mode == Globals.GAME_MODE_2TEAMS) {
+            visibleTeams = 2;
+        } else if (mode == Globals.GAME_MODE_4TEAMS) {
+            visibleTeams = 4;
+        } else {
+            visibleTeams = 0; // FFA — no team totals to show
+        }
+        if (visibleTeams == 0) {
+            mTeamScoreboard.setVisibility(View.GONE);
+            return;
+        }
+        mTeamScoreboard.setVisibility(View.VISIBLE);
+        for (int i = 0; i < 4; i++) {
+            if (mTeamScoreTV[i] == null) continue;
+            if (i < visibleTeams) {
+                mTeamScoreTV[i].setVisibility(View.VISIBLE);
+                mTeamScoreTV[i].setText(getString(R.string.team_score_format, i + 1, teamPoints[i]));
+            } else {
+                mTeamScoreTV[i].setVisibility(View.GONE);
+            }
         }
     }
 

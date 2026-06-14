@@ -17,6 +17,7 @@
 package com.simplecoil.simplecoil;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGattCharacteristic;
@@ -26,6 +27,8 @@ import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -39,7 +42,6 @@ import android.graphics.drawable.AnimationDrawable;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.Uri;
 import android.os.Build;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -59,6 +61,7 @@ import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.Chronometer;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.PopupMenu;
@@ -71,9 +74,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
-import androidx.fragment.app.FragmentTransaction;
+import androidx.core.content.ContextCompat;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -89,18 +90,19 @@ import java.util.concurrent.TimeUnit;
  * An example full-screen activity that shows and hides the system UI (i.e.
  * status bar and navigation/system bar) with user interaction.
  */
+@SuppressLint("MissingPermission")
 public class FullscreenActivity extends AppCompatActivity implements PopupMenu.OnMenuItemClickListener {
     private static final String TAG = "scmain";
 
     private static final int REQUEST_ENABLE_BT = 1;
-    private static final int REQUEST_QR_SCAN = 2;
 
     // For testing and debugging network only -- dumps you straight to the play game layout and allows you to switch teams without connecting a blaster
     private static final boolean TEST_NETWORK = false;
 
     private Button mReconnectButton = null;
     private Button mConnectButton = null;
-    private Button mQRConnectButton = null;
+    private Button mConnectCodeButton = null;
+    private Button mShowCodeButton = null;
     private Button mDedicatedServerButton = null;
     private Button mTeamMinusButton = null;
     private Button mTeamPlusButton = null;
@@ -148,10 +150,6 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
     private Button mGameLimitButton = null;
     private TextView mGameCountDownTV = null;
     private PopupMenu mNetworkPopup = null;
-
-    private FragmentManager mFragmentMgr = null;
-    private FragmentTransaction mFragmentTransc = null;
-    private Fragment mMapFragment = null;
 
     private CountDownTimer mSpawnTimer = null;
     private CountDownTimer mReloadTimer = null;
@@ -211,6 +209,7 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
     private static byte mBlasterType = BLASTER_TYPE_PISTOL;
 
     final private int REQUEST_CODE_LOCATION_PERMISSIONS = 1022;
+    final private int REQUEST_CODE_BLUETOOTH_PERMISSIONS = 1023;
 
     private static final byte COMMAND_ID_INCREMENT = (byte) 0x10;
     private static byte mCommandID = (byte) 0x00;
@@ -404,7 +403,6 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_fullscreen);
-        mFragmentMgr = getSupportFragmentManager();
         mEliminationCountTV = findViewById(R.id.eliminations_count_tv);
         mReconnectButton = findViewById(R.id.reconnect_weapon_button);
         mReconnectButton.setOnClickListener((new View.OnClickListener() {
@@ -428,21 +426,21 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
                 }
             }));
         }
-        mQRConnectButton = findViewById(R.id.connect_qr_weapon_button);
-        if (mQRConnectButton != null) {
-            mQRConnectButton.setOnClickListener((new View.OnClickListener() {
+        mConnectCodeButton = findViewById(R.id.connect_code_weapon_button);
+        if (mConnectCodeButton != null) {
+            mConnectCodeButton.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
-                    try {
-                        Intent intent = new Intent("com.google.zxing.client.android.SCAN");
-                        intent.putExtra("SCAN_MODE", "QR_CODE_MODE"); // "PRODUCT_MODE for bar codes
-                        startActivityForResult(intent, REQUEST_QR_SCAN);
-                    } catch (Exception e) {
-                        Uri marketUri = Uri.parse("market://details?id=com.google.zxing.client.android");
-                        Intent marketIntent = new Intent(Intent.ACTION_VIEW,marketUri);
-                        startActivity(marketIntent);
-                    }
+                    showEnterCodeDialog();
                 }
-            }));
+            });
+        }
+        mShowCodeButton = findViewById(R.id.show_code_button);
+        if (mShowCodeButton != null) {
+            mShowCodeButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    showShareCodeDialog();
+                }
+            });
         }
         mDedicatedServerButton = findViewById(R.id.dedicated_server_button);
         if (mDedicatedServerButton != null) {
@@ -690,7 +688,6 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
                 }
             }));
         }
-        loadFragment();
         updatePlayerSettings();
     }
 
@@ -1111,6 +1108,7 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
             mPlayerDataButton.setVisibility(View.GONE);
         }
         Intent intent = new Intent(NetMsg.NETMSG_GPSSETTING);
+        intent.setPackage(getPackageName());
         sendBroadcast(intent);
     }
 
@@ -1522,14 +1520,17 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
     @Override
     protected void onResume() {
         super.onResume();
-        registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+        ContextCompat.registerReceiver(this, mGattUpdateReceiver,
+                makeGattUpdateIntentFilter(), ContextCompat.RECEIVER_NOT_EXPORTED);
         if (mBluetoothLeService != null && mDeviceAddress != null && !mDeviceAddress.isEmpty()) {
             final boolean result = mBluetoothLeService.connect(mDeviceAddress);
             Log.d(TAG, "Connect request result=" + result);
         }
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-        registerReceiver(mBluetoothReceiver, filter);
-        registerReceiver(mUDPUpdateReceiver, makeUDPUpdateIntentFilter());
+        ContextCompat.registerReceiver(this, mBluetoothReceiver, filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(this, mUDPUpdateReceiver,
+                makeUDPUpdateIntentFilter(), ContextCompat.RECEIVER_NOT_EXPORTED);
         setupUDPServiceConnection();
         setupTcpClientServiceConnection();
         setupTcpServerServiceConnection();
@@ -1555,32 +1556,9 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
         super.onDestroy();
     }
 
-    private void loadFragment() {
-        if (mMapFragment == null) return;
-        mMapFragment = getSupportFragmentManager().findFragmentById(R.id.map_fragment);
-        if (mMapFragment != null)
-            return;
-        mFragmentTransc = mFragmentMgr.beginTransaction();
-        RelativeLayout parentLayout = findViewById(R.id.play_layout);
-        mFragmentTransc.add(parentLayout.getId(), mMapFragment);
-        //mFragmentTransc.addToBackStack(null);
-        mFragmentTransc.commit();
-    }
-
     @Override
-    public void onBackPressed()
-    {
-        Fragment f = getSupportFragmentManager().findFragmentById(R.id.map_fragment);
-        if (f != null) {
-            mFragmentMgr.popBackStack();
-        }
+    public void onBackPressed() {
         moveTaskToBack(true);
-    }
-
-    private void removeFragment() {
-        FragmentTransaction fragmentTransaction = mFragmentMgr.beginTransaction();
-        fragmentTransaction.remove(getSupportFragmentManager().findFragmentById(R.id.map_fragment));
-        fragmentTransaction.commit();
     }
 
     private ScanCallback mLeScanCallback = new ScanCallback() {
@@ -1627,11 +1605,17 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
             case REQUEST_CODE_LOCATION_PERMISSIONS:
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // Permission Granted
+            case REQUEST_CODE_BLUETOOTH_PERMISSIONS:
+                boolean allGranted = grantResults.length > 0;
+                for (int result : grantResults) {
+                    if (result != PackageManager.PERMISSION_GRANTED) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+                if (allGranted) {
                     connectWeapon();
                 } else {
-                    // Permission Denied
                     Toast.makeText(this, getString(R.string.error_location_permission_required), Toast.LENGTH_SHORT)
                             .show();
                 }
@@ -1661,24 +1645,90 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         Log.e(TAG, "onActivityResult " + requestCode);
-        if (requestCode == REQUEST_QR_SCAN) {
-
-            if (resultCode == RESULT_OK) {
-                mDeviceAddress = data.getStringExtra("SCAN_RESULT");
-                if (mDeviceAddress != null && !mDeviceAddress.isEmpty()) {
-                    Log.e(TAG, "Got QR: " + mDeviceAddress);
-                    connectWeapon();
-                } else {
-                    Log.e(TAG, "Did not get any good QR result");
-                }
-            }
-            if(resultCode == RESULT_CANCELED){
-                //handle cancel
-                Log.e(TAG, "QR cancel");
-            }
-        } else if (requestCode == REQUEST_ENABLE_BT) {
+        if (requestCode == REQUEST_ENABLE_BT) {
             connectWeapon();
         }
+    }
+
+    // The "blaster code" is the BLE MAC address rendered as 12 hex characters,
+    // grouped XXXX-XXXX-XXXX for legibility. It identifies a specific physical
+    // blaster so a player on a second phone can connect to it directly.
+    private static String formatDeviceCode(String macAddress) {
+        if (macAddress == null) return "";
+        String hex = macAddress.replaceAll("[^0-9A-Fa-f]", "").toUpperCase();
+        if (hex.length() != 12) return macAddress;
+        return hex.substring(0, 4) + "-" + hex.substring(4, 8) + "-" + hex.substring(8, 12);
+    }
+
+    // Accepts the canonical XXXX-XXXX-XXXX format plus the colon-separated MAC
+    // form, with arbitrary whitespace, in any case. Returns the canonical MAC
+    // (AA:BB:CC:DD:EE:FF) or null if the input is not a valid Bluetooth address.
+    private static String parseDeviceCode(String input) {
+        if (input == null) return null;
+        String hex = input.replaceAll("[^0-9A-Fa-f]", "").toUpperCase();
+        if (hex.length() != 12) return null;
+        StringBuilder mac = new StringBuilder(17);
+        for (int i = 0; i < 12; i += 2) {
+            if (i > 0) mac.append(':');
+            mac.append(hex, i, i + 2);
+        }
+        String result = mac.toString();
+        return BluetoothAdapter.checkBluetoothAddress(result) ? result : null;
+    }
+
+    private void showEnterCodeDialog() {
+        final EditText input = new EditText(this);
+        input.setHint(R.string.enter_code_hint);
+        input.setSingleLine(true);
+
+        int paddingPx = (int) (16 * getResources().getDisplayMetrics().density);
+        FrameLayout container = new FrameLayout(this);
+        container.setPadding(paddingPx, paddingPx / 2, paddingPx, 0);
+        container.addView(input);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.enter_code_title)
+                .setView(container)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String mac = parseDeviceCode(input.getText().toString());
+                        if (mac == null) {
+                            Toast.makeText(FullscreenActivity.this,
+                                    R.string.enter_code_invalid, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        mDeviceAddress = mac;
+                        connectWeapon();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showShareCodeDialog() {
+        if (mDeviceAddress == null || mDeviceAddress.isEmpty()) {
+            return;
+        }
+        final String code = formatDeviceCode(mDeviceAddress);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.show_code_title)
+                .setMessage(getString(R.string.show_code_message) + "\n\n" + code)
+                .setPositiveButton(R.string.copy_button, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        ClipboardManager cm = (ClipboardManager)
+                                getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (cm != null) {
+                            cm.setPrimaryClip(ClipData.newPlainText("Blaster code", code));
+                            Toast.makeText(FullscreenActivity.this,
+                                    R.string.code_copied_toast, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
+                .setNegativeButton(android.R.string.ok, null)
+                .show();
     }
 
     private void connectWeapon() {
@@ -1700,11 +1750,23 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
             finish();
         }
 
-        // Coarse location permissions are required to use Bluetooth on 6.0+ devices
-        // We go ahead and ask for fine permission in case we do a GPS enabled network game
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            int hasLocationPermission = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION);
-            if (hasLocationPermission != PackageManager.PERMISSION_GRANTED) {
+        // Bluetooth permissions split across two regimes:
+        //   API 31+ (Android 12+): runtime BLUETOOTH_SCAN and BLUETOOTH_CONNECT.
+        //   API 23..30           : ACCESS_FINE_LOCATION (legacy BLE-scan requirement).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            String[] needed = new String[]{
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT
+            };
+            for (String perm : needed) {
+                if (checkSelfPermission(perm) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(needed, REQUEST_CODE_BLUETOOTH_PERMISSIONS);
+                    return;
+                }
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
                         REQUEST_CODE_LOCATION_PERMISSIONS);
                 return;
@@ -1743,7 +1805,7 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
         mConnectButton.setEnabled(false);
         mReconnectButton.setEnabled(false);
         mDedicatedServerButton.setEnabled(false);
-        mQRConnectButton.setEnabled(false);
+        if (mConnectCodeButton != null) mConnectCodeButton.setEnabled(false);
         mScanning = true;
         TextView connectStatusTV = findViewById(R.id.connect_status_tv);
         if (connectStatusTV != null) {
@@ -1800,7 +1862,7 @@ public class FullscreenActivity extends AppCompatActivity implements PopupMenu.O
         mConnectButton.setEnabled(true);
         mReconnectButton.setEnabled(true);
         mDedicatedServerButton.setEnabled(true);
-        mQRConnectButton.setEnabled(true);
+        if (mConnectCodeButton != null) mConnectCodeButton.setEnabled(true);
         TextView connectStatusTV = findViewById(R.id.connect_status_tv);
         if (connectStatusTV != null) connectStatusTV.setText(R.string.connect_status_not_connected);
         mLastShotCount = 0;
