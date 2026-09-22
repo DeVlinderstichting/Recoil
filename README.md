@@ -1,5 +1,5 @@
 # Why 
-Dutch Butterfly conservation is a non-profit aimed at preserving butterflies and other insects. Why did we spend time updating an app for a laser game toy? We had a team building exercise where we turned our office into a laser game battleground for one evening. We used the Recoil guns as they were cheap. We had great fun, we are now sharing this code hoping that other people might also have the joy of pretend shooting each other. Also we support using devices as long as possible, so even when official support has ended, these guns are now still usable. 
+Dutch Butterfly conservation is a non-profit aimed at preserving butterflies and other insects. Why did we spend time updating an app for a laser game toy? We had a team building exercise where we turned our office into a laser game battleground for one evening. We used the Recoil guns as they were cheap. We had great fun, we are now sharing this code hoping that other people might also have the joy of pretend shooting each other. Also we support using devices as long as possible, so even when official support has ended, these guns are now still usable. We share this code hoping it is useful, but without any guarantees. By using this code you accept that we are not responsible for any problems/damages of any kind.  
 
 
 # SimpleCoil
